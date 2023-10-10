@@ -120,7 +120,6 @@ class Model_train:
       self.optim_G_2x = torch.optim.Adam(self.generator_2x.parameters(), lr=self.args.lr_rate, betas=(0.5, 0.999))
       self.scheduler_G_2x = self.get_scheduler(self.optim_G_2x)
       
-    # self.ffl = FFL(loss_weight=1.0, alpha=1.0)
 
     if self.args.gan_mode:
       print("Enabled discriminator training")
@@ -144,7 +143,7 @@ class Model_train:
       
 
     if self.args.l1_loss or self.args.netG == "srgan_colearn" or self.args.netG == "enc_srgan":
-      self.L1_loss = torch.nn.L1Loss() #MSGIL_NORM_Loss(scale=2) #
+      self.L1_loss = torch.nn.L1Loss() 
       print("using L1 loss function")
     else:
       self.l2_loss = torch.nn.MSELoss()
@@ -467,7 +466,7 @@ class Model_train:
           
           # predicted_hr_unnorm = data_normalization.denormalize_torch_min_max(predicted_hr,mean,std)
           predicted_hr_unnorm = data_normalization.denormalize_torch(predicted_hr,mean,std)
-          # lr = ((lr+1)(mean-std)/2)+std
+        
           rmse_i= 0 
           mae_i= 0 
 
