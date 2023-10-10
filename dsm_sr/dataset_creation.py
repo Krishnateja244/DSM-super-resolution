@@ -27,9 +27,6 @@ def rasterio_saver(hr_path,image_size,txt_name,cropped_path,no_images):
 
                 xsize, ysize = image_size,image_size
 
-                # xmin, xmax = 0, src.width - xsize
-                # ymin, ymax = 0, src.height - ysize
-                # xoff, yoff = random.randint(xmin, xmax), random.randint(ymin, ymax)
                 profile = src.profile
                 temp_profile = profile.copy()
                 count =0
