@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torchvision
-# from spectral_normalization import SpectralNorm
 from torch.nn.utils import spectral_norm as SpectralNorm
 import functools
 import numpy as np 
