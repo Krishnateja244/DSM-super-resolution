@@ -4,12 +4,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import init
-from torch.utils.data import Dataset , DataLoader
-from glob import glob
+from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from generator import GlobalGenerator,LocalEnhancer,SrganGenerator, Multi_SrganGen, Encoder, SRCNN,unet_rgb
+from generator import SrganGenerator, Encoder
 from discriminator import Discriminator, NLayerDiscriminator, UNetDiscriminatorSN
-from utils import calculate_error, TV_loss
 from torchvision.utils import make_grid
 from dataset_loader import CustomDataset, compute_local_dsm_std_per_centered_patch
 from tqdm import tqdm
@@ -23,13 +21,10 @@ from effnetv2 import effnetv2_s
 from pix2pix import UnetGenerator
 import torchvision.models as models
 from torch.optim import lr_scheduler
-from focal_frequency_loss import FocalFrequencyLoss as FFL
+from focal_frequency_loss import FocalFrequencyLoss as FFL 
 from srgan_resca import SRCAGAN
 import cv2
-# from ESRGAN import ESRGAN,RRDBNet
-from MSGIL_loss import MSGIL_NORM_Loss
-from swiss import SwissDataset
-from torchvision.transforms import InterpolationMode, Resize
+from ESRGAN import ESRGAN,RRDBNet
 from basicsr.archs.rrdbnet_arch import RRDBNet
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import segmentation_models_pytorch as smp
@@ -78,21 +73,13 @@ class Model_train:
       print("using SRGAN model")
       self.generator =  SrganGenerator(1, 128,self.args.down_scale).to(device) 
 
-    elif self.args.netG == "srcnn_rgb":
-      print("using the srcnn rgb fusion")
-      self.generator = SRCNN(1,64).to(device)
-      
-    elif self.args.netG == "srgan_multi":
-      print("using multi SRGAN model")
-      self.generator =  unet_rgb(4,64) #Multi_SrganGen(1,128).to(device)
-
     elif self.args.netG == "srgan_atten":
       print("using SRGAN RESIDUAL CHANNEL ATTENTION")
       self.generator = SRCAGAN(1,128,10,10,16).to(device) # original 20 atten blocks 
 
     elif self.args.netG =="esrgan":
       print("using ESRGAN model")
-      self.generator =  RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4).to(device) #RRDBNet(1,1,scale=4,num_feat=64,num_block=23,num_grow_ch=32).to(device) #RRDBNet(3,3,64,23,32).to(device) # #ESRGAN(1,1,scale_factor=self.args.down_scale).to(device) 
+      self.generator =  RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4).to(device) #ESRGAN(1,1,scale_factor=self.args.down_scale).to(device) 
 
     elif self.args.netG == "srgan_colearn":
       print("using co-learning based srgan models")
@@ -107,11 +94,6 @@ class Model_train:
       print("Using pix2pix(unet) generator")
       self.generator = UnetGenerator(1,1,8).to(device) #smp.Unet('resnet50', classes=1, in_channels=3).to(device) #
     
-    elif self.args.netG == "pix2pixhd":
-      print("using the pix2pihd generator")
-      # self.generator = GlobalGenerator(1,1).to(device)
-      self.generator = LocalEnhancer(1,1).to(device)
-
     elif self.args.netG == "enc_srgan":
       self.generator = Encoder(1,128).to(device)
     
@@ -231,18 +213,7 @@ class Model_train:
                                   num_samples=self.num_eval_samples,tile_size=self.tile_size,scale=1/self.args.down_scale,model=self.args.netG,transform=True,dsm_mean=None,dsm_std=std,test_set=False)
 
       test_loader = DataLoader(test_dataset,batch_size=self.args.batch_size,shuffle=True) 
-      
-      
-      # train_dataset = SwissDataset(self.args.data_dir,scale_interpolation=InterpolationMode.BICUBIC, split='train')
-      
-                
-      # train_loader = DataLoader(train_dataset,batch_size=self.args.batch_size,shuffle=True)
-      # print(len(train_loader))
-      # std = next(iter(train_loader))[4]
-      # print(std)
-      # test_dataset = SwissDataset(self.args.data_dir,scale_interpolation=InterpolationMode.BICUBIC, split='test',std = std[0])
-                            
-      # test_loader = DataLoader(test_dataset,batch_size=self.args.batch_size,shuffle=True) 
+       
       print("shape of input: ",next(iter(test_loader))[0].shape)
       print("shape of lr2 : ",next(iter(test_loader))[1].shape)
       print("shape of gt : ",next(iter(test_loader))[2].shape)
@@ -315,8 +286,6 @@ class Model_train:
       lr2 = lr2.to(device)
       rgb_hr = rgb_hr.to(device)
 
-      # lr_images = rgb_hr #for unet rgb network
-      # lr = rgb_hr
       if self.args.netG == "esrgan" and self.args.use_pretrained:
         lr_images = lr_images.cpu().detach().numpy()
         hr_images = hr_images.cpu().detach().numpy()
@@ -332,17 +301,13 @@ class Model_train:
         lr_images = torch.from_numpy(dummy_RGB_lr).to(device)
         hr_images = torch.from_numpy(dummy_RGB_hr).to(device)
 
-      if self.args.netG == "srgan_multi" or self.args.netG == "srcnn_rgb":
-        predicted_hr_images,predicted_rgb = self.generator(lr_images,rgb_hr)
-      
-      elif self.args.netG == "srgan_colearn":
+      if self.args.netG == "srgan_colearn":
         predicted_hr_images= self.generator(lr_images)
         predicted_hr_images_2x = self.generator_2x(lr2)
 
       elif self.args.netG == "enc_srgan":
         # lr_images = hr_images # comment when not pretraining hte model with hr images
         predicted_hr_images = self.generator(lr_images)
-        # predicted_hr_images = self.generator(lr_images)
         
       else:
         predicted_hr_images = self.generator(lr_images) 
@@ -357,12 +322,6 @@ class Model_train:
         adv_hr_real = self.discriminator(hr_images)
         adv_hr_fake = self.discriminator(predicted_hr_images.detach())
 
-        # label_smoothing = 0.5 
-        # num_classes = 2
-        # new_hr_real_labels = torch.ones_like(adv_hr_real) * (1-label_smoothing) + label_smoothing / num_classes
-        # if self.args.label_smooth:
-        #   pass
-          # d_real_loss = self.gan_loss(adv_hr_real, torch.ones_like(adv_hr_real)-0.3)
         if self.args.relat_gan:
           d_real_loss = self.gan_loss(adv_hr_real-torch.mean(adv_hr_fake), torch.ones_like(adv_hr_real))
           d_fake_loss = self.gan_loss(adv_hr_fake-torch.mean(adv_hr_real), torch.zeros_like(adv_hr_fake))
@@ -371,7 +330,6 @@ class Model_train:
 
           d_fake_loss = self.gan_loss(adv_hr_fake, torch.zeros_like(adv_hr_fake))
         
-
         df_loss = (d_real_loss +d_fake_loss)*0.5
         
         D_adv_loss += df_loss.item()
@@ -398,16 +356,6 @@ class Model_train:
 
       elif self.args.l1_loss:
         gr_loss = self.L1_loss(predicted_hr_images, hr_images)*self.args.lamda # L1 loss
-        if self.args.netG == "srcnn_rgb":
-           gr_loss_2 = self.L1_loss(predicted_rgb,hr_images)*self.args.lamda
-        ############### 2x loss #######################
-        # hr_images_2x = lr2.to(device)
-        # inter_model = nn.Sequential(*list(self.generator.children())[:-2],nn.Conv2d(256,1,3,1,1)).to(device)
-        # predicted_2x = inter_model(lr_images)
-        # gr_loss_2 = F.l1_loss(predicted_2x, hr_images_2x)*self.args.lamda/2
-        # gr_loss = gr_loss +gr_loss_2
-        ###########################################
-        # ffl_loss = self.ffl(predicted_hr_images, hr_images)
         tv_loss = self.TV_loss(predicted_hr_images,self.tv_weight)
 
       else:
@@ -424,7 +372,6 @@ class Model_train:
           gf_loss = self.gan_loss(predicted_hr_labels,torch.ones_like(predicted_hr_labels))
 
         if self.args.percep_loss:
-          # gr_loss = torch.tensor(0) 
           per_loss = self.vgg_loss(predicted_hr_images,hr_images)
           g_loss = gf_loss + gr_loss +(per_loss*self.args.lamda)
           G_percep_loss += per_loss.item()
@@ -436,10 +383,6 @@ class Model_train:
           CL_loss_2x += colearn_loss_2x
           G_rec_loss_2x += gr_loss_2x.item()
           G_tot_loss_2x += g_loss_2x.item() 
-
-        elif self.args.netG == "srcnn_rgb":
-
-          g_loss = gf_loss + gr_loss + gr_loss_2 
 
         else:
           g_loss = gf_loss + gr_loss
@@ -464,7 +407,7 @@ class Model_train:
           G_tot_loss_2x += g_loss_2x.item() 
 
         else:
-          g_loss = gr_loss/self.args.lamda #+ (ffl_loss * self.args.lamda)
+          g_loss = gr_loss
 
         G_rec_loss += gr_loss.item()
         G_tot_loss += g_loss.item()
@@ -485,13 +428,6 @@ class Model_train:
     wandb.log({"Train Original LR": grid1})
     wandb.log({"Train Original HR": grid2})
     wandb.log({"Train Reconstruced": grid3})
-    if self.args.netG == "srcnn_rgb":
-      grid4 = make_grid(rgb_hr)
-      grid4 = wandb.Image(grid4, caption=" train High Resolution rgb Image")
-      wandb.log({"Train rgb": grid4})
-      grid5 = make_grid(predicted_rgb)
-      grid5 = wandb.Image(grid5, caption="train Reconstructed rgb Image")
-      wandb.log({"Train reconstructed rgb": grid5})
     return G_adv_loss,D_adv_loss,D_fake_loss,D_real_loss,G_rec_loss,G_tot_loss,G_percep_loss,TV_loss,CL_loss,CL_loss_2x,G_rec_loss_2x,G_tot_loss_2x
       
 
@@ -524,12 +460,8 @@ class Model_train:
             lr = torch.from_numpy(dummy_RGB_lr).to(device)
             hr = torch.from_numpy(dummy_RGB_hr).to(device)
 
-          if self.args.netG == "srgan_multi" or self.args.netG == "srcnn_rgb":
-            predicted_hr,predicted_rgb = self.generator(lr,rgb_hr)
-          else:
             predicted_hr = self.generator(lr)
             
-          
           # hr_unnorm = data_normalization.denormalize_torch_min_max(hr,mean,std)
           hr_unnorm = data_normalization.denormalize_torch(hr,mean,std)
           
@@ -559,13 +491,6 @@ class Model_train:
           grid1 = wandb.Image(grid1, caption="Low Resolution Image")
           grid2 = wandb.Image(grid2, caption="High Resolution Image")
           grid3 = wandb.Image(grid3, caption="Reconstructed High Resolution Image")
-          if self.args.netG == "srcnn_rgb":
-            grid4 = make_grid(rgb_hr)
-            grid4 = wandb.Image(grid4, caption="High Resolution rgb Image")
-            wandb.log({"original rgb": grid4})
-            grid5 = make_grid(predicted_rgb)
-            grid5 = wandb.Image(grid5, caption="Reconstructed rgb Image")
-            wandb.log({"reconstructed rgb": grid5})
           wandb.log({"Original LR": grid1})
           wandb.log({"Original HR": grid2})
           wandb.log({"Reconstruced": grid3})
