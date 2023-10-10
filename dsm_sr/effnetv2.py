@@ -66,18 +66,12 @@ class SELayer(nn.Module):
 def conv_3x3_bn(inp, oup, stride):
     return nn.Sequential(
         nn.Conv2d(inp, oup, 3, stride, 1, bias=False),
-        # nn.BatchNorm2d(oup),
-        # SiLU()
         nn.LeakyReLU(0.2, True)
     )
 
 def conv_1x1_bn(inp, oup):
     return nn.Sequential(
         nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
-        # nn.BatchNorm2d(oup),
-        # SiLU()
-        # nn.Tanh()
-        # nn.LeakyReLU(0.2, True)
     )
 
 def interpolate(x,height,width,scale):
@@ -99,29 +93,21 @@ class MBConv(nn.Module):
             self.conv = nn.Sequential(
                 # pw
                 nn.Conv2d(inp, hidden_dim, 1, 1, 0, bias=False),
-                # nn.BatchNorm2d(hidden_dim),
-                # SiLU(),
                 nn.LeakyReLU(0.2),
                 # dw
                 nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
-                # nn.BatchNorm2d(hidden_dim),
-                # SiLU(),
                 nn.LeakyReLU(0.2),
                 SELayer(inp, hidden_dim),
                 # pw-linear
                 nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
-                # nn.BatchNorm2d(oup),
             )
         else:
             self.conv = nn.Sequential(
                 # fused
                 nn.Conv2d(inp, hidden_dim, 3, stride, 1, bias=False),
-                # nn.BatchNorm2d(hidden_dim),
-                # SiLU(),
                 nn.LeakyReLU(0.2),
                 # pw-linear
                 nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
-                # nn.BatchNorm2d(oup),
             )
 
 
@@ -181,14 +167,9 @@ class EffNetV2(nn.Module):
                 layers.append(block(input_channel, output_channel, s if i == 0 else 1, t, use_se))
                 input_channel = output_channel
         self.features = nn.Sequential(*layers)
-        # building last several layers
-        # output_channel = _make_divisible(1792 * width_mult, 8) if width_mult > 1.0 else 1792
         # self.multihead = MultiHeadSelfAttention(input_channel)
         self.pixel_suffel = nn.PixelShuffle(2) 
         self.conv = conv_1x1_bn(1,1)
-        # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        # self.classifier = nn.Linear(output_channel, num_classes)
-        # self._initialize_weights() # (kt) removed to use default pytorch intitialization
 
     def forward(self, x):
         
@@ -200,9 +181,6 @@ class EffNetV2(nn.Module):
     
         x = x + interpolate(x_int.cpu().detach().numpy(),x_int.shape[-1],x_int.shape[-1],4)
         x = self.conv(x)
-        # x = self.avgpool(x)
-        # x = x.view(x.size(0), -1)
-        # x = self.classifier(x)
         return x
 
     def _initialize_weights(self):
@@ -294,6 +272,4 @@ if __name__=="__main__":
     print(model)
     out = model(x)
     print(out.shape)
-    # print(model)
-    # summary(model,(1,64,64))
  
