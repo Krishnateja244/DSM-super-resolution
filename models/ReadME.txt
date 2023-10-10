@@ -1,0 +1,1 @@
+This directory contains the trained model checkpoints for testing
