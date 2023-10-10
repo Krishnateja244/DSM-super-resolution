@@ -1,7 +1,5 @@
 import torch 
-import numpy as np 
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from utils import calculate_error
+import numpy as np
 
 from discriminator import Discriminator
 from dataset_loader import CustomDataset,compute_local_dsm_std_per_centered_patch
@@ -10,32 +8,24 @@ import data_normalization
 import rasterio
 import os 
 from rasterio import Affine
-from rasterio.plot import reshape_as_image, reshape_as_raster
 from effnetv2 import effnetv2_s
 import argparse
 from pix2pix import UnetGenerator
 from rasterio.windows import Window
-from generator import GlobalGenerator, LocalEnhancer,SrganGenerator,Multi_SrganGen, Encoder, SRCNN
+from generator import SrganGenerator, Encoder 
 import cv2
-from ResDepth.lib.evaluation import evaluate_performance
 from ResDepth.lib import utils
 import logging
-import sgolay2
 import torchvision.transforms as T
-from torchvision.transforms.functional import InterpolationMode
-
-from rasterio.plot import reshape_as_image, reshape_as_raster, show
 import rasterio
 from rasterio import Affine
 from rasterio.windows import Window
 import torch.nn as nn 
 from srgan_resca import SRCAGAN
-# from ESRGAN import ESRGAN,RRDBNet
+from ESRGAN import ESRGAN
+
 from basicsr.archs.rrdbnet_arch import RRDBNet
 import matplotlib.pyplot as plt
-from introvae import IntroVAE
-from swiss import SwissDataset
-from torchvision.transforms import InterpolationMode, Resize
 import torchvision.transforms as transforms
 logger = utils.setup_logger('root_logger', level=logging.INFO, log_to_console=True, log_file=None)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,19 +42,10 @@ class Model_eval:
         if self.args.netG == "srgan":
             print("using SRGAN model")
             self.model =  SrganGenerator(1, 128,self.args.down_scale).to(device)   
-            # self.model_2 = SrganGenerator(1, 128,self.args.down_scale/2).to(device)
 
         elif self.args.netG == "enc_srgan":
             print("using the encoder sran")
             self.model = Encoder(1).to(device)
-
-        elif self.args.netG == "srcnn_rgb":
-            print("using the srcnn rgb fusion")
-            self.model = SRCNN(1,64).to(device)
-
-        elif self.args.netG == "srgan_multi":
-            print("using multi SRGAN model")
-            self.model =  Multi_SrganGen(1,128).to(device)
 
         elif self.args.netG == "srgan_atten":
             print("using SRGAN RESIDUAL CHANNEL ATTENTION")
@@ -80,19 +61,8 @@ class Model_eval:
 
         elif self.args.netG =="esrgan":
             print("using ESRGAN model")
-            self.model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4).to(device) #ESRGAN(1,1,scale_factor=self.args.down_scale).to(device) #RRDBNet(3,3,64,23,32).to(device) #
+            self.model = ESRGAN(1,1,scale_factor=self.args.down_scale).to(device)
 
-        elif self.args.netG == "pix2pixhd":
-            print("Using pix2pixhd generator")
-            # print("Local")
-            # self.model = LocalEnhancer(1,1).to(device)
-            self.model = GlobalGenerator(1,1).to(device)
-        
-        elif self.args.netG == "srvae":
-            print("Using srvae model")
-            str_to_list = lambda x: [int(xi) for xi in x.split(',')]
-            self.model = IntroVAE(cdim=1, hdim=512, channels=str_to_list('32, 64, 128, 256, 512, 512'), image_size=256).cuda()
-        
         if self.args.gen_weights.split("/")[-1].split(".")[-1] == "pt":
             we = torch.load(self.args.gen_weights)
             print(we["epoch"])
@@ -104,10 +74,10 @@ class Model_eval:
             #     keyname = 'params'
             # self.model.load_state_dict(we[keyname], strict=True)
             self.model.load_state_dict(torch.load(self.args.gen_weights)["g_model"])
-            # self.model_2.load_state_dict(torch.load(self.args.gen_weights_2)["g_model"])
+
         else:
             self.model.load_state_dict(torch.load(self.args.gen_weights))
-        # self.load_model(self.model,self.args.gen_weights)
+        
 
         self.test_loader = self.get_dataloader()
     
@@ -126,35 +96,25 @@ class Model_eval:
         self.mean = param_file[0].split(",")[-1]
         self.std = float(param_file[1].split(",")[-1])
 
-        # train_dataset = CustomDataset(hr_dir=self.args.train_hr_path, rgb_hr_dir=self.args.train_rgb_hr_path, \
-        #                           num_samples=1000,tile_size=self.tile_size,scale=self.scale,model=self.args.netG,transform=None)
+        train_dataset = CustomDataset(hr_dir=self.args.train_hr_path, rgb_hr_dir=self.args.train_rgb_hr_path, \
+                                  num_samples=1000,tile_size=self.tile_size,scale=self.scale,model=self.args.netG,transform=None)
       
 
-        # train_loader = DataLoader(train_dataset,batch_size=self.batch_size,shuffle=True)
+        train_loader = DataLoader(train_dataset,batch_size=self.batch_size,shuffle=True)
 
-        # self.mean,self.std = compute_local_dsm_std_per_centered_patch(train_loader)
+        self.mean,self.std = compute_local_dsm_std_per_centered_patch(train_loader)
 
         print(f"Normalization parameters Mean: {self.mean}, Std :{self.std}")
-        # std = 17.37
+        
         
         test_dataset = CustomDataset(hr_dir=self.args.test_hr_path,rgb_hr_dir=self.args.test_rgb_hr_path,num_samples=self.args.num_samples, \
                                     tile_size=self.tile_size,scale=self.scale,model=self.args.netG,transform=True,dsm_mean=None,dsm_std=float(self.std),test_set=False)
 
         test_loader = DataLoader(test_dataset,batch_size=self.batch_size,shuffle=False)
 
-        # train_dataset = SwissDataset(self.args.data_dir,scale_interpolation=InterpolationMode.BICUBIC, split='train')
-      
-                
-        # train_loader = DataLoader(train_dataset,batch_size=self.args.batch_size,shuffle=True)
-        # std = next(iter(train_loader))[4]
-        # print(std)
-        # test_dataset = SwissDataset(self.args.data_dir,scale_interpolation=InterpolationMode.BICUBIC, split='test',std = std[0])
-                                
-        # test_loader = DataLoader(test_dataset,batch_size=self.args.batch_size,shuffle=True) 
-
         print("shape of input: ",next(iter(test_loader))[0].shape)
         print("shape of lr2 : ",next(iter(test_loader))[1].shape)
-        print(("shape of rgb_array : ",next(iter(test_loader))[3].shape))
+        print("shape of rgb_array : ",next(iter(test_loader))[3].shape)
         print("shape of gt : ",next(iter(test_loader))[2].shape)
         return test_loader
 
@@ -198,13 +158,7 @@ class Model_eval:
                     hr_array = torch.from_numpy(dummy_RGB_hr).to(device)
 
                 with torch.no_grad():
-                    if self.args.netG == "srgan_multi":
-                        predicted_hr = self.model(lr_array,lr_2)
-                        # predicted_hr = self.model_2(predicted_hr)
-                    elif self.args.netG == "srcnn_rgb":
-                        predicted_hr,_ = self.model(lr_array,rgb_hr_array)
-                    else:
-                        predicted_hr = self.model(lr_array)
+                    predicted_hr = self.model(lr_array)
                 
                 predicted_hr = data_normalization.denormalize_numpy(predicted_hr,mean,std)
 
@@ -225,9 +179,6 @@ class Model_eval:
 
                 for i in range(hr_array.shape[0]):
         
-                    # mae = mean_absolute_error(np.squeeze(hr_array[i],axis=0),np.squeeze(predicted_hr[i],axis=0))
-                    # rmse = mean_squared_error(np.squeeze(hr_array[i],axis=0),np.squeeze(predicted_hr[i],axis=0),squared=False)  # previously used this skleearn metrics
-                    
                     residuals = np.squeeze(predicted_hr[i],axis=0) - np.squeeze(hr_array[i],axis=0)
                     #residuals = predicted_hr[i] - hr_array[i] # esrgan 3 channel
                 
@@ -250,8 +201,6 @@ class Model_eval:
                     abs_diff_from_med = np.ma.abs(residuals - absolute_median)
                     NMAD = 1.4826 * np.ma.median(abs_diff_from_med)
 
-                    # mae = mean_absolute_error(hr_array[i].flatten(),predicted_hr[i].flatten())
-                    # rmse = mean_squared_error(hr_array[i].flatten(),predicted_hr[i].flatten(),squared=False)
                     if self.args.netG == "pix2pix" or self.args.netG == "pix2pixhd" or self.args.netG == "enc_srgan":
                         
                         residuals_bc = np.squeeze(hr_array[i],axis=0) - np.squeeze(lr_array[i],axis=0)
@@ -281,8 +230,6 @@ class Model_eval:
                     # Normalized median absolute deviation (NMAD)
                     abs_diff_from_med_bc = np.ma.abs(residuals_bc - absolute_median_bc)
                     NMAD_bc = 1.4826 * np.ma.median(abs_diff_from_med_bc)
-                    # mae_bc = mean_absolute_error(np.squeeze(hr_array[i],axis=0),bicubic)
-                    # rmse_bc = mean_squared_error(np.squeeze(hr_array[i],axis=0),bicubic,squared=False)
 
                     mae_b +=mae_bc
                     rmse_b += rmse_bc
@@ -327,25 +274,22 @@ class Model_eval:
             rgb_hr_files = rgb_hr.readlines()[:10] ## 10 for dsm files
 
         for index in range(len(hr_files)):
-            print(index)
+            
             xoffset = int(hr_files[index].split(",")[1])
             yoffset = int(hr_files[index].split(",")[2])
             
-            # lr = np.squeeze(reshape_as_image(lr_array),axis=2)
             file_name = hr_files[index].split(",")[0]
             hr = rasterio.open(file_name) 
             
             window = Window(xoffset,yoffset,self.tile_size,self.tile_size)
             temp_profile = hr.profile.copy()  
             transform = hr.window_transform(window)
-            # transform = hr.transform
             temp_profile.update({
                     'height':self.tile_size,
                     'width': self.tile_size,
                     'transform': transform
                     })
 
-            # temp_profile = hr.profile.copy()
             hr_array =hr.read(1,window = window)
 
             rgb_hr_file_name = rgb_hr_files[index].split(",")[0]
@@ -354,17 +298,11 @@ class Model_eval:
             rgb_hr_array = rgb_hr.read(window = rgb_hr_window)
             rgb_profile = rgb_hr.profile.copy()  
             rgb_transform = rgb_hr.window_transform(rgb_hr_window)
-            # transform = hr.transform
             rgb_profile.update({
                     'height':self.tile_size,
                     'width': self.tile_size,
                     'transform': rgb_transform
                     })
-            # hr_array =torch.tensor(hr_array).unsqueeze(0)
-            # lr_transform= T.Resize(size=(int(self.tile_size*self.scale),int(self.tile_size*self.scale)),interpolation=InterpolationMode.NEAREST)
-            # lr_array = lr_transform(hr_array)
-            # lr_array = np.squeeze(lr_array.numpy(),axis=0)
-            # hr_array = np.squeeze(hr_array,axis=0)
 
             lr_array = cv2.resize(hr_array,(int(self.tile_size*self.scale),int(self.tile_size*self.scale)),cv2.INTER_CUBIC)
             lr_2 = cv2.resize(lr_array,(int(self.tile_size*1/2),int(self.tile_size*1/2)),cv2.INTER_CUBIC)
@@ -372,7 +310,6 @@ class Model_eval:
                 lr_array = cv2.resize(lr_array,(int(self.tile_size),int(self.tile_size)),cv2.INTER_CUBIC)
 
             mean = np.mean(lr_array)
-            # self.std = np.std(lr_array)
             normalize = data_normalization.get_transform(mean,self.std)
             lr_array = normalize(lr_array)
             self.lr_array = torch.unsqueeze(lr_array,0)
@@ -401,16 +338,11 @@ class Model_eval:
                 # hr_array = torch.from_numpy(dummy_RGB_hr).to(device)
 
             with torch.no_grad():
-                if self.args.netG == "srgan_multi":
-                    predicted_hr = self.model(self.lr_array.to(device),lr_2.to(device)) 
-                    # predicted_hr = self.model_2(predicted_hr)
-                elif self.args.netG == "srcnn_rgb":
-                    predicted_hr,_ = self.model(self.lr_array.to(device),rgb_hr_array_norm.to(device))
-                else:
-                    predicted_hr = self.model(self.lr_array.to(device))
-                    # esrgan 3 channel
-                    # predicted_hr = predicted_hr[:,0,:,:]
-                    # self.lr_array = self.lr_array[:,0,:,:]
+                
+                predicted_hr = self.model(self.lr_array.to(device))
+                # esrgan 3 channel
+                # predicted_hr = predicted_hr[:,0,:,:]
+                # self.lr_array = self.lr_array[:,0,:,:]
                     
             
             predicted_hr = data_normalization.denormalize_numpy(torch.squeeze(predicted_hr,0),mean,self.std)
@@ -461,64 +393,6 @@ class Model_eval:
         
         return sr_path, hr_path, input_path
     
-    def feature_maps(self):
-        model_weights =[]
-
-        conv_layers = []
-        model_children = list(self.model.children())
-        print(model_children)
-        counter = 0
-        for i in range(len(model_children)):
-            # print(type(model_children[i]))
-            if type(model_children[i]) == torch.nn.modules.container.Sequential or type(model_children[i]) == nn.Sequential:
-                for j in range(len(model_children[i])):
-                    if type(model_children[i][j]) == torch.nn.modules.conv.Conv2d or type(model_children[i][j]) == nn.Conv2d :
-                        counter+=1
-                        model_weights.append(model_children[i][j].weight)
-                        conv_layers.append(model_children[i][j])
-
-            else:
-                seq = model_children[i]#.conv
-                if type(seq) == torch.nn.modules.container.Sequential or type(seq) == nn.Sequential:
-                    for j in range(len(seq)):
-                        if type(seq[j]) == torch.nn.modules.conv.Conv2d or type(seq[j]) == nn.Conv2d:
-                            counter+=1
-                            model_weights.append(seq[j].weight)
-                            conv_layers.append(seq[j])
-
-            
-        print(f"Total convolution layers: {counter}")
-        outputs = []
-        names = []
-        image = self.lr_array.to(device)
-        for layer in conv_layers[:-2]:
-            print(layer)
-            image = layer(image)
-            outputs.append(image)
-            names.append(str(layer))
-
-        # print(len(outputs))#print feature_maps
-        # for feature_map in outputs:
-        #     print(feature_map.shape)
-
-        processed = []
-        for feature_map in outputs:
-            feature_map = feature_map.squeeze(0)
-            gray_scale = torch.sum(feature_map,0)
-            gray_scale = gray_scale / feature_map.shape[0]
-            processed.append(gray_scale.data.cpu().numpy())
-
-        # for fm in processed:
-        #     print(fm.shape)
-
-        fig = plt.figure(figsize=(30, 50))
-        for i in range(len(processed)):
-            a = fig.add_subplot(5, 4, i+1)
-            imgplot = plt.imshow(processed[i])
-            a.axis("off")
-            a.set_title(names[i].split(',')[0], fontsize=30)
-        plt.savefig(str(f'./feature_fol/{self.args.output_dir.split("/")[-2]}_feat_{self.args.down_scale}x.jpg'), bbox_inches='tight')
-
 
 if __name__ =="__main__":
 
@@ -566,6 +440,3 @@ if __name__ =="__main__":
     inf = Model_eval(args)
     inf.test()
     sr_path, hr_path,input_path = inf.visualize_results()
-    # inf.feature_maps()
-    # output = evaluate_performance(sr_path,input_path,hr_path,logger)
-  
