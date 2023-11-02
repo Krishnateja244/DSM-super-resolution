@@ -107,6 +107,7 @@ class NLayerDiscriminator(nn.Module):
 
     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d):
         """Construct a PatchGAN discriminator
+        THis patch discriminator code was borrowed from pix2pix codebase
 
         Parameters:
             input_nc (int)  -- the number of channels in input images
