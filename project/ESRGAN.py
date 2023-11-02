@@ -109,6 +109,8 @@ class MultiHeadSelfAttention(nn.Module):
         return out
 
 ######### Real ESRGAN pretrained ##
+
+## Real ESRGN model for using the pretrained chekpoint to finetune the model on DSM dataset
 from torch import nn as nn
 from torch.nn import functional as F
 
