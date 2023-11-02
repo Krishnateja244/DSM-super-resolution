@@ -16,7 +16,16 @@ import math
 import cv2
 from interpolation import Interpolation
 
-def rasterio_saver(hr_path,image_size,txt_name,cropped_path,no_images):
+def rasterio_saver(hr_path,image_size,txt_name,no_images):
+    """Function performs the creation of "hr_256_files.txt" for the training and testing dataset files. 
+        2000*2000 high resolution elevation tif files are cropped to 256*256 patch
+
+    Args:
+        hr_path (path): path to directory containing original hr files
+        image_size (int): size of image patch
+        txt_name (path): path to store hr_256_files.txt file
+        no_images (int): number of images for the dataset
+    """
     
     hr_files_list = [file for file in os.listdir(hr_path) if file.split(".")[-1] == "tif"][:no_images]
 
@@ -58,6 +67,13 @@ def rasterio_saver(hr_path,image_size,txt_name,cropped_path,no_images):
 
 
 def downsample_nn(hr_path,lr_path,scale):
+    """Function performs saving the nearest neighbour downsampled high resolution files to directory
+
+    Args:
+        hr_path (path): path to directory containing original hr files
+        lr_path (path): path to store the downsapled hr images
+        scale (float): downsapling scale
+    """
 
     hr_files_list = [file for file in os.listdir(hr_path) if file.split(".")[-1] == "tif"]
 
