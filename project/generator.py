@@ -94,6 +94,24 @@ class SrganGenerator(nn.Module):
         x13 = self.PS2(x12)
     return self.final_layer(x13)
 
+class SRGAN_rgb(nn.Module):
+    def __init__(self, num_channels=1,feat_channels=64):
+        super(SRGAN_rgb, self).__init__()
+        self.srgan = SrganGenerator(1,64,4)
+        self.feature_extractor =  torch.nn.Sequential(
+                smp.Unet('resnet50', classes=64, in_channels=4))
+        self.upsample_torch = torch.nn.Upsample(scale_factor=4, mode='bicubic')
+        self.last_afconcat = nn.Sequential(
+            nn.Conv2d(64,1,3,1,1),
+        )
+
+    def forward(self, x,im):
+        x1 = self.srgan(x)
+        x_bicubic = self.upsample_torch(x)
+        x2_rgb = self.feature_extractor(torch.cat([im, x_bicubic-x_bicubic.mean((1,2,3), keepdim=True) ], 1))
+        x2 = self.last_afconcat(x1+x2_rgb.detach())
+        x3_rgb = self.last_afconcat(x2_rgb)
+        return x2,x3_rgb
 
 class Encoder(nn.Module):
     def __init__(self, in_channels=1, num_filters=128):
