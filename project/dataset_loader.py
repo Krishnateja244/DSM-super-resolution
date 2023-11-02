@@ -70,8 +70,23 @@ def compute_local_dsm_std_per_centered_patch(dataloader, raster_identifier='DSM'
 
 
 class CustomDataset(Dataset):
-    def __init__(self,hr_dir,rgb_hr_dir,num_samples,tile_size,scale,model=None,dsm_mean=None,dsm_std=None,transform=None,test_set=False): #lr_dir
-        # self.lr_dir = lr_dir
+    """ Defines the custom dataset for the DSM and DTM"""
+
+    def __init__(self,hr_dir,rgb_hr_dir,num_samples,tile_size,scale,model=None,dsm_mean=None,dsm_std=None,transform=None,test_set=False):
+        """Constructs the custom dataset for DSM and DTM
+
+        Args:
+            hr_dir (path): Path to the directory of hr files
+            rgb_hr_dir (path): Path to the directory of RGB hr files
+            num_samples (int): number of samples to be used for the dataset
+            tile_size (int): tile size of the image
+            scale (float): the scale of image of image size
+            model (str, optional): name of model to decide the LR input resolution. Defaults to None.
+            dsm_mean (float, optional): Mean for normalizing the dataset. Defaults to None.
+            dsm_std (_type_, optional): Standard deviation for normalizing the dataset. Defaults to None.
+            transform (bool, optional): if true normalizes the dataset using mean and std. Defaults to None.
+            test_set (bool, optional): if true selects last "{num_samples}" from the txt file. Defaults to False.
+        """
         self.hr_dir = hr_dir
         self.transform = transform
         self.num_samples = num_samples
@@ -103,6 +118,7 @@ class CustomDataset(Dataset):
                                                          std=[0.5, 0.5, 0.5])])
 
     def __len__(self):
+        """ Return the number of images being used for the dataset"""
         return len(self.hr_filepath)
     
     def __getitem__(self,index):
@@ -127,6 +143,7 @@ class CustomDataset(Dataset):
         lr_2 = cv2.resize(hr_array,(int(self.tile_size*1/2),int(self.tile_size*1/2)),cv2.INTER_CUBIC) 
 
         if self.model == "pix2pix" or self.model == "pix2pixhd" or self.model == "srvae" or self.model =="enc_srgan":
+            ## upsamples the 4x downsampled LR input as these models output same resolution as of input shape
             lr_array = cv2.resize(lr_array,(int(self.tile_size),int(self.tile_size)),cv2.INTER_CUBIC)
             lr_2 = cv2.resize(lr_2,(int(self.tile_size),int(self.tile_size)),cv2.INTER_CUBIC)
         
