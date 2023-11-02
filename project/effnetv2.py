@@ -1,9 +1,6 @@
 """
-Creates a EfficientNetV2 Model as defined in:
-Mingxing Tan, Quoc V. Le. (2021). 
-EfficientNetV2: Smaller Models and Faster Training
-arXiv preprint arXiv:2104.00298.
-import from https://github.com/d-li14/mobilenetv2.pytorch
+This code base was taken from the 
+https://github.com/d-li14/efficientnetv2.pytorch
 """
 
 import torch
@@ -16,15 +13,15 @@ __all__ = ['effnetv2_s', 'effnetv2_m', 'effnetv2_l', 'effnetv2_xl']
 
 
 def _make_divisible(v, divisor, min_value=None):
-    """
-    This function is taken from the original tf repo.
-    It ensures that all layers have a channel number that is divisible by 8
-    It can be seen here:
-    https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet.py
-    :param v:
-    :param divisor:
-    :param min_value:
-    :return:
+    """ Function ensures that all layers have a channel number that is divisible by 8
+
+    Args:
+        v (int): value
+        divisor (int): divisor. Defaults to 8
+        min_value (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        new_v: new value
     """
     if min_value is None:
         min_value = divisor
@@ -118,7 +115,13 @@ class MBConv(nn.Module):
             return self.conv(x)
         
 class Self_Attention (nn.Module):
+      """ Defines the Self-attention mechanism"""
       def __init__(self, in_dim):
+        """ Constructs the self-attention mechanism
+
+        Args:
+            in_dim (int): feature layer dimension
+        """
         super(Self_Attention,self).__init__()
         self.query_conv=nn.Conv2d(in_dim, in_dim//16, kernel_size=1)
         self.key_conv=nn.Conv2d(in_dim, in_dim//16, kernel_size=1)
@@ -138,7 +141,15 @@ class Self_Attention (nn.Module):
         return out #, attention
 
 class MultiHeadSelfAttention(nn.Module):
+    """ Defines the Multi-head attention mechanism"""
+
     def __init__(self, in_channels, num_heads=8):
+        """ Constructs the multi-ead attention mechanism
+
+        Args:
+            in_channels (int): channels dimension
+            num_heads (int, optional): number of heads for multi-head mechanism. Defaults to 8.
+        """
         super(MultiHeadSelfAttention, self).__init__() 
         self.heads = nn.ModuleList([Self_Attention(in_channels) for _ in range(num_heads)])
         self.conv = nn.Conv2d(num_heads * in_channels, in_channels, kernel_size=1)
@@ -150,7 +161,15 @@ class MultiHeadSelfAttention(nn.Module):
         return out
       
 class EffNetV2(nn.Module):
-    def __init__(self, cfgs, num_classes=1000, width_mult=1.):
+    """ Defines the EffectientNetv2 model"""
+
+    def __init__(self, cfgs, width_mult=1.):
+        """COnstructs the EffNetv2 model
+
+        Args:
+            cfgs (list): model configs
+            width_mult (float, optional): width multiplier. Defaults to 1..
+        """
         super(EffNetV2, self).__init__()
         self.cfgs = cfgs
 
