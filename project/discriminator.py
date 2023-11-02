@@ -1,18 +1,27 @@
 import torch
 import torch.nn as nn
-import torchvision
 from torch.nn.utils import spectral_norm as SpectralNorm
 import functools
 import numpy as np 
 import torch.nn.functional as F
 
 class Blocks(nn.Module):
+  """ Defines the CNN blocks for the model """
+
   def __init__(self, in_channels, out_channels, stride):
+    """ Constructs CNN blocks 
+
+    Args:
+        in_channels (int): the number of input channels 
+        out_channels (_type_): the number of out channels
+        stride (int): stride number 
+    """
     super(Blocks, self).__init__()
     self.conv = nn.Sequential(
-        # nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1),
-        # nn.BatchNorm2d(out_channels),
-        SpectralNorm(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1)),
+        nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1),
+        nn.BatchNorm2d(out_channels),
+        ## to use spectral normalization instead of batch normalization
+        # SpectralNorm(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1)),
         nn.LeakyReLU(0.2),
     )
 
@@ -20,7 +29,14 @@ class Blocks(nn.Module):
     return self.conv(x)  
 
 class Self_Attention (nn.Module):
+      """ Defines the self-attention mechanism"""
+
       def __init__(self, in_dim):
+        """Constructs the self-attention 
+
+        Args:
+            in_dim (int): number of input channels
+        """
         super(Self_Attention,self).__init__()
         self.query_conv=nn.Conv2d(in_dim, in_dim//8, kernel_size=1)
         self.key_conv=nn.Conv2d(in_dim, in_dim//8, kernel_size=1)
@@ -40,7 +56,14 @@ class Self_Attention (nn.Module):
         return out, attention
 
 class Discriminator(nn.Module):
+  """ Defines the pixel based discriminator """
   def __init__(self, in_channels, features):
+    """COnstructs the pixel discriminator
+
+    Args:
+        in_channels (int): number of input channels
+        features (int): number of feature channels 
+    """
     super(Discriminator, self).__init__()
     self.first_layer= nn.Sequential(
         nn.Conv2d(in_channels, features, 3, 2 ,1),
@@ -74,7 +97,7 @@ class Discriminator(nn.Module):
     x =  self.Block6(x)
     x =  self.Block7(x)
     x =  self.Block8(x)
-    # x,_ = self.attention(x)
+    # x,_ = self.attention(x) # to use the self-attention for discriminator
     x = self.Block9(x)
     x = x.view(x.size(0), -1)
     return self.final_layer(x)
